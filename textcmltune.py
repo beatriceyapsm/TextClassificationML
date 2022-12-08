@@ -24,6 +24,8 @@ from sklearn.naive_bayes import MultinomialNB
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import classification_report
 from imblearn.over_sampling  import RandomOverSampler
+from imblearn.over_sampling import SMOTE
+from imblearn.pipeline import make_pipeline
 
 
 nltk.download('omw-1.4')
@@ -94,15 +96,14 @@ if uploaded_file1 and uploaded_file2:
     df['Text'] = df['Text'].apply(lambda x: finalpreprocess(x))
 
     X_train, X_test, y_train, y_test = train_test_split(df['Text'],df['Class'], test_size=0.2) #split data into train and test sets
-    # oversample = RandomOverSampler(sampling_strategy='minority')
-    # # fit and apply the transform
-    # X_train, y_train = oversample.fit_resample(X_train, y_train)
+
+    # fit and apply the transform
+    tv = TfidfVectorizer() 
+    ros = RandomOverSampler(sampling_strategy='minority')
+    X_ROS, y_ROS = ros.fit_resample(tv.fit_transform(X_train), y_train)
+    X_test = tv.transform(X_test)
 
     #Build a vectorizer / classifier pipeline that filters out tokens that are too rare or too frequent
-    # svm_pipe1 = Pipeline([('vect',    CountVectorizer()),
-    #                   ('tfidf',   TfidfTransformer()),
-    #                   ('SVC',   LinearSVC(class_weight='balanced', random_state=50))])
-
     
     #Load Estimators
     rf=RandomForestClassifier()
@@ -125,24 +126,25 @@ if uploaded_file1 and uploaded_file2:
     parameters_list=[paramrf, paramnb, paramsvc]
     model_log=pd.DataFrame(["_rf", "_nb", "_svc"])
 
-    for i in range(len(ensemble_clf)):
-        Grid=GridSearchCV(Pipeline([('tf-idf', TfidfVectorizer()), ('clf',ensemble_clf[i])]), param_grid=parameters_list[i], 
-                        n_jobs=-1, cv=3, verbose=3).fit(X_train, y_train)
+    for i in range(len(ensemble_clf)): # ('tf-idf', TfidfVectorizer()),
+        Grid=GridSearchCV(Pipeline([ ('clf',ensemble_clf[i])]), param_grid=parameters_list[i], 
+                        n_jobs=-1, cv=3, verbose=3,scoring='average_precision' ).fit(X_ROS, y_ROS)
         model_log[i]=(ensemble_clf[i],Grid.best_score_, Grid.best_estimator_)  
 
     model_log= model_log.T
     model_log=model_log.sort_values(by=1, ascending=False).reset_index(drop = True)
-    st.write(model_log)
+    st.dataframe(model_log)
     
     bestmodelt=eval(model_log.loc[0][2])
-    bestmodelt.fit(X_train, y_train)
+    bestmodelt.fit(X_ROS, y_ROS)
     y_predicted = bestmodelt.predict(X_test)
     st.write(classification_report(y_test, y_predicted))
 
 
     #Predict the outcome on the new set and store it in a variable named w_predicted
     dw['clean_Text'] = dw['Text'].apply(lambda x: finalpreprocess(x))
-    w_predicted = bestmodelt.predict(dw['clean_Text'])
+    X_pred = tv.transform(dw['clean_Text'])
+    w_predicted = bestmodelt.predict(X_pred)
     dw['Predicted'] = w_predicted
     dw=dw.drop(['clean_Text'], axis=1)
     st.dataframe(dw)

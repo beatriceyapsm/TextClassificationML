@@ -20,6 +20,6 @@ if uploaded_file1 :
     # define oversampling strategy
     oversample = RandomOverSampler(sampling_strategy='minority')
     # fit and apply the transform
-    X_over, y_over = oversample.fit_resample(X, y)
+    X_over, y_over = oversample.fit_resample([X], [y])
     # summarize class distribution
     st.write(len(y_over))
